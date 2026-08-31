@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Smoke test of the generator itself — same test previously run as the
+  # "sidecar" job in merkleye/merkleye's .github/workflows/ci.yml, now run at
+  # this repo's root instead of a sidecars/dnstwist/ subdirectory.
+  smoke-test:
+    name: Smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Smoke test the generator
+        run: |
+          python - <<'PY'
+          import json
+
+          from fastapi.testclient import TestClient
+          from app import app
+          c = TestClient(app)
+
+          r = c.post("/generate", json={"domain": "example.com", "tlds": ["com"]})
+          assert r.status_code == 200, r.text
+          body = r.json()
+          variants = body["variants"]
+          assert len(variants) > 100, f"only {len(variants)} variants"
+
+          # The A-label form is the match key; U-labels would silently never
+          # match certificate SANs (merkleye/merkleye's DESIGN G-08).
+          puny = [v for v in variants if v["fqdn"].startswith("xn--")]
+          assert puny, "no punycode variants — homoglyph matching would no-op"
+          assert all(v["unicode"] for v in puny), "punycode variants must carry a display form"
+
+          # Cyrillic homoglyphs are the canonical lookalike attack.
+          assert any(v["algorithm"] == "cyrillic" for v in variants), "cyrillic fuzzer missing"
+
+          # registered/mx are resolved in bulk at generation time (a
+          # deliberate, narrow exception to the offline-generate rule for
+          # these two signals only — see app.py's module docstring).
+          assert all("tld" in v and v["tld"] for v in variants), "tld missing on some variants"
+          assert all(isinstance(v["registered"], bool) for v in variants), "registered must be bool"
+          assert all(isinstance(v["mx"], list) for v in variants), "mx must be a list"
+
+          from app import _effective_tld, _resolve
+
+          assert _effective_tld("paypa1.com", "paypal.com", ["xyz"]) == "com"
+          assert _effective_tld("paypal.xyz", "paypal.com", ["xyz"]) == "xyz"
+          # original_domain is always eTLD+1 (merkleye/merkleye's DESIGN
+          # G-06), so a multi-label suffix like co.uk is recovered without a
+          # PSL lookup.
+          assert _effective_tld("examp1e.co.uk", "example.co.uk", ["xyz"]) == "co.uk"
+
+          a, mx_records, ns_records = _resolve("example.com")
+          assert a, "example.com should resolve"
+
+          # /generate/stream must be NDJSON: one line per variant, then a
+          # single closing "done" line — and the two endpoints must agree on
+          # which variants they return.
+          r = c.post("/generate/stream", json={"domain": "example.com", "tlds": ["com"]})
+          assert r.status_code == 200, r.text
+          lines = [json.loads(line) for line in r.text.splitlines() if line]
+          assert lines[-1]["type"] == "done"
+          assert all(line["type"] == "variant" for line in lines[:-1])
+          assert lines[-1]["variant_count"] == len(lines) - 1 == len(variants)
+
+          # The input domain itself is not a lookalike.
+          assert not any(v["algorithm"].startswith("*") for v in variants)
+
+          assert c.get("/health").status_code == 200
+          print(f"OK — {len(variants)} variants, {len(puny)} punycode")
+          PY
+
+  # Same "container integrity" gate as merkleye/merkleye's container-build
+  # job — actually builds the Containerfile referenced from
+  # merkleye/merkleye's deploy/docker-compose.yml, rather than trusting that
+  # it merely parses.
+  container-build:
+    name: Build merkleye-dnstwist
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build merkleye-dnstwist
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Containerfile
+          push: false
+          tags: merkleye-dnstwist:ci
+          cache-from: type=gha,scope=merkleye-dnstwist
+          cache-to: type=gha,mode=max,scope=merkleye-dnstwist

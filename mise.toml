@@ -1,0 +1,5 @@
+[tools]
+# Only used for the CI smoke test below — the published image pins its own
+# python:3.12-slim base in the Containerfile independently of this.
+python = "3.12"
+node = "22" # .github/workflows/release.yml
