@@ -1,0 +1,38 @@
+# Validates that pull request titles follow the Conventional Commits spec
+# (https://www.conventionalcommits.org). This repo squash-merges, so the PR
+# title becomes the commit subject on main -- and release.yml runs
+# semantic-release over those subjects to decide the next version. A title
+# without a type is a release that silently never happens.
+#
+# The rules live in Merkleye/github-templates so the allowed type list is
+# maintained once for every Merkleye repo rather than drifting per repo.
+#
+# pull_request, not pull_request_target: the latter reads the workflow file
+# from the base branch, so a workflow that exists only on a PR branch never
+# runs at all -- the PR adding this check would get no signal from it, and it
+# would only start working after that PR merged. This way the adopting PR is
+# its own proof. Nothing here checks out or executes PR code, so both are
+# safe; pull_request_target is worth revisiting once this is on main, since
+# this repo is public and it would stop a fork PR editing the rules it is
+# judged by.
+#
+# `edited` matters: without it, fixing a rejected title never re-runs the
+# check and the PR stays red.
+name: PR Title
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  pull-requests: read
+
+jobs:
+  conventional-title:
+    permissions:
+      pull-requests: read
+    uses: Merkleye/github-templates/.github/workflows/pr-title.yml@main
