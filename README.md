@@ -3,8 +3,13 @@
 The dnstwist sidecar for [Merkleye](https://github.com/merkleye/merkleye) —
 a stateless FastAPI service that wraps
 [dnstwist](https://github.com/elceef/dnstwist) to generate lookalike domain
-permutations (`/generate`, `/generate/stream`) and enrich a single domain at
-hit time (`/enrich`).
+permutation *names* (`/generate`) and enrich a single domain at hit time
+(`/enrich`). Generation does no DNS resolution: registration and DNS state
+are tracked separately, on a schedule, by `merkleye/merkleye`'s
+`internal/variantscan` (see that repo's `docs/VARIANT-TRACKING.md`) — a
+generation-time snapshot goes stale within weeks of being written, so it
+isn't one. `/generate/stream` was removed along with the resolution pass
+that made a `/generate` call slow enough to need a progress stream.
 
 This repo was split out of `merkleye/merkleye`'s `sidecars/dnstwist/`
 directory so the dnstwist integration has its own build/release lifecycle,

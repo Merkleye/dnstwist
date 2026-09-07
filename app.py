@@ -3,21 +3,19 @@
 Two endpoints, deliberately split by when they run:
 
   POST /generate  — batch, one domain at a time, run when a domain is added
-                    or a set is regenerated. Produces lookalike permutations
-                    and resolves registered/mx for each of them in bulk — a
-                    one-time, few-second pass rather than continuous traffic.
+                    or a set is regenerated. Produces lookalike permutation
+                    *names* and nothing else.
   POST /enrich    — at hit time, one domain. Full resolution (A/MX/NS) for a
                     single lookalike, called only after a certificate for it
                     has actually appeared in CT.
 
-Batch-resolving registered/mx during /generate is a deliberate, narrow
-exception to dnstwist's normal mode of resolving every permutation to see
-which exist: doing that continuously answers "does this domain exist?" when
-the question is "is someone standing infrastructure up on it?", and a
-certificate showing up in CT is a far better continuous trigger than a DNS
-sweep. Registered/mx at generation time is acceptable because it only runs
-once per generation/regeneration, not on a poll loop — see DESIGN §08 for the
-full offline-generate / hit-time-enrich rationale this narrows.
+/generate used to resolve registered/mx for every permutation it produced.
+That state now belongs to internal/variantscan, which refreshes it on a
+schedule against the active set — because the answer moving is the signal, and
+a value frozen at generation time is wrong within weeks of being written. It
+also made a run slow enough to need a progress stream, which is why the
+/generate/stream endpoint that used to live here is gone: with resolution out,
+generation is permutation math. See docs/VARIANT-TRACKING.md and DESIGN §08.
 
 This service never touches Postgres. It takes a domain and returns strings, so
 it is trivially testable and a crash here cannot corrupt state.
@@ -33,13 +31,11 @@ import socket
 import sys
 import time
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any
 
 import dnstwist
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -51,12 +47,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-# socket.gethostbyname_ex has no per-call timeout. That was fine for /enrich
-# (one call per hit), but the bulk generation-time pass below fans it out
-# across a thread pool over potentially thousands of variants — a single
-# slow-to-answer resolver could otherwise stall a worker indefinitely and
-# blow past the "a few seconds" this is supposed to take. Bound it the same
-# way dns.resolver's MX/NS lookups already are (lifetime=5.0).
+# socket.gethostbyname_ex has no per-call timeout, and /enrich runs it against
+# attacker-controlled infrastructure, which has every reason to answer slowly.
+# Bound it the same way dns.resolver's MX/NS lookups already are
+# (lifetime=5.0).
 socket.setdefaulttimeout(5.0)
 
 app = FastAPI(
@@ -198,8 +192,6 @@ class Variant(BaseModel):
     algorithm: str
     unicode: str | None = None
     tld: str = ""
-    registered: bool = False
-    mx: list[str] = Field(default_factory=list)
 
 
 class GenerateResponse(BaseModel):
@@ -303,12 +295,13 @@ def _effective_tld(fqdn: str, original_domain: str, candidate_tlds: list[str]) -
 
 
 def _resolve(domain: str) -> tuple[list[str], list[str], list[str]]:
-    """Resolve one domain's A, MX, and NS records.
+    """Resolve one domain's A, MX, and NS records, for /enrich.
 
-    Shared by /enrich (hit-time, single domain) and the bulk generation-time
-    pass below, which only needs a subset (registered = bool(a), mx) of what
-    /enrich exposes — one resolution implementation so the two can never
-    silently diverge on what "registered" means.
+    Generation does not resolve anything any more, so this has exactly one
+    caller. The scheduled state tracking that replaced the generation-time
+    pass lives in Go (internal/variantscan), where reading a DNS RCODE is
+    possible: distinguishing NXDOMAIN from NODATA is the whole basis of the
+    delegation gate, and the socket API this uses cannot express it.
     """
     a_records: list[str] = []
     try:
@@ -334,33 +327,6 @@ def _resolve(domain: str) -> tuple[list[str], list[str], list[str]]:
     return a_records, mx_records, ns_records
 
 
-# Matches dnstwist's own CLI default (-t, --threads 18). Sequential resolution
-# across thousands of generated variants would not finish in the few seconds
-# this is expected to take.
-_RESOLVE_WORKERS = 18
-
-
-def _resolve_stream(variants: list[Variant]) -> Iterator[Variant]:
-    """Resolve registered + mx for every variant, concurrently, yielding each
-    as its resolution completes rather than in submission order.
-    """
-    if not variants:
-        return
-    with ThreadPoolExecutor(max_workers=_RESOLVE_WORKERS) as pool:
-        futures = {pool.submit(_resolve, v.fqdn): v for v in variants}
-        for future in as_completed(futures):
-            variant = futures[future]
-            a_records, mx_records, _ns_records = future.result()
-            variant.registered = bool(a_records)
-            variant.mx = mx_records
-            yield variant
-
-
-def _resolve_all(variants: list[Variant]) -> None:
-    for _ in _resolve_stream(variants):
-        pass
-
-
 def _run_fuzzer(req: GenerateRequest) -> list[dict[str, str]]:
     if not req.domain:
         raise HTTPException(status_code=400, detail="domain is required")
@@ -379,7 +345,7 @@ def _run_fuzzer(req: GenerateRequest) -> list[dict[str, str]]:
 
 def _filtered_variants(req: GenerateRequest, permutations: list[dict[str, str]]) -> Iterator[tuple[Variant, bool]]:
     """Yield (variant, truncated) pairs — the shared filter/dedup/cap logic
-    behind both /generate and /generate/stream, so the two endpoints can never
+    behind /generate, so filtering and truncation can never
     silently diverge on which permutations they return.
     """
     wanted = {a.lower() for a in req.algorithms}
@@ -423,60 +389,12 @@ def generate(req: GenerateRequest) -> GenerateResponse:
             break
         variants.append(variant)
 
-    _resolve_all(variants)
-
     return GenerateResponse(
         generator_version=_generator_version(),
         config_hash=_config_hash(req),
         truncated=truncated,
         variants=variants,
     )
-
-
-@app.post("/generate/stream")
-def generate_stream(req: GenerateRequest) -> StreamingResponse:
-    """Same generation as /generate, emitted as newline-delimited JSON.
-
-    One line per variant, followed by exactly one closing line —
-    {"type":"done",...} on success or {"type":"error",...} on failure.
-    Fuzzing/filtering itself is near-instant, so variant lines are emitted as
-    each one's registered/mx resolution completes rather than as it clears
-    the filter/dedup pipeline — resolving thousands of candidates is the part
-    of this that actually takes a few seconds, and that's what a caller
-    watching this feed is waiting on.
-    """
-    permutations = _run_fuzzer(req)
-
-    def body() -> Iterator[str]:
-        variants: list[Variant] = []
-        truncated = False
-        try:
-            for variant, would_truncate in _filtered_variants(req, permutations):
-                if would_truncate:
-                    truncated = True
-                    break
-                variants.append(variant)
-        except Exception as exc:  # keep a mid-stream failure visible to the caller
-            yield json.dumps({"type": "error", "detail": str(exc)}) + "\n"
-            return
-
-        try:
-            for variant in _resolve_stream(variants):
-                yield json.dumps({"type": "variant", **variant.model_dump()}) + "\n"
-        except Exception as exc:
-            yield json.dumps({"type": "error", "detail": str(exc)}) + "\n"
-            return
-
-        yield json.dumps({
-            "type": "done",
-            "generator": "dnstwist",
-            "generator_version": _generator_version(),
-            "config_hash": _config_hash(req),
-            "truncated": truncated,
-            "variant_count": len(variants),
-        }) + "\n"
-
-    return StreamingResponse(body(), media_type="application/x-ndjson")
 
 
 @app.post("/enrich", response_model=EnrichResponse)
