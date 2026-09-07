@@ -11,41 +11,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Unit tests, mise-driven: mise.toml's `test` task installs
+  # Repo-specific and staying here: mise.toml's `test` task installs
   # requirements.txt + requirements-dev.txt and runs pytest with a 100%
   # statement-coverage floor (--cov-fail-under=100) — see tests/test_app.py.
   # Every network call is mocked, so this never depends on real DNS.
+  #
+  # Only the installer is shared. A template that forwarded a list of task
+  # names would add a hop without removing a copy — see github-templates'
+  # README, "The mise convention".
   test:
     name: Test (100% coverage floor)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: Merkleye/github-templates/.github/actions/setup-mise@main
 
       - name: Run tests
         run: mise run test
 
-  # Same "container integrity" gate as merkleye/merkleye's container-build
-  # job — actually builds the Containerfile referenced from
-  # merkleye/merkleye's deploy/docker-compose.yml, rather than trusting that
-  # it merely parses.
+  # The container-integrity gate, from the template. Same build this repo ran
+  # inline, and the same {image, context, file} list pr-preview-image.yml and
+  # scripts/release-image.sh use — keep all three in step.
+  #
+  # Defaults cover everything else: ubuntu-latest, `builder: auto` (which
+  # resolves to Buildx on that label), the per-image GitHub Actions layer
+  # cache this job already used, and a 15-minute timeout.
   container-build:
-    name: Build dnstwist
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build dnstwist
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Containerfile
-          push: false
-          tags: dnstwist:ci
-          cache-from: type=gha,scope=dnstwist
-          cache-to: type=gha,mode=max,scope=dnstwist
+    permissions:
+      contents: read
+    uses: Merkleye/github-templates/.github/workflows/container-ci.yml@main
+    with:
+      images: '[{"image":"dnstwist","context":".","file":"Containerfile"}]'
