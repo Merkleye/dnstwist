@@ -36,7 +36,7 @@ jobs:
           created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
           {
-            echo "image=ghcr.io/${owner}/merkleye-dnstwist"
+            echo "image=ghcr.io/${owner}/dnstwist"
             echo "preview_tag=${preview_tag}"
             echo "preview_sha_tag=${preview_sha_tag}"
             echo "preview_sha=${preview_sha}"
@@ -118,7 +118,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           OWNER: ${{ github.repository_owner }}
-          PACKAGE_NAME: merkleye-dnstwist
+          PACKAGE_NAME: dnstwist
           PR_TAG: pr-${{ github.event.pull_request.number }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

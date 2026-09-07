@@ -28,8 +28,6 @@ jobs:
       - name: Smoke test the generator
         run: |
           python - <<'PY'
-          import json
-
           from fastapi.testclient import TestClient
           from app import app
           c = TestClient(app)
@@ -49,12 +47,14 @@ jobs:
           # Cyrillic homoglyphs are the canonical lookalike attack.
           assert any(v["algorithm"] == "cyrillic" for v in variants), "cyrillic fuzzer missing"
 
-          # registered/mx are resolved in bulk at generation time (a
-          # deliberate, narrow exception to the offline-generate rule for
-          # these two signals only — see app.py's module docstring).
+          # Generation returns names only: registration and DNS state belong
+          # to merkleye/merkleye's internal/variantscan, on a schedule (see
+          # that repo's docs/VARIANT-TRACKING.md). A generation-time
+          # "registered" flag reappearing here would be the old
+          # frozen-snapshot bug coming back.
           assert all("tld" in v and v["tld"] for v in variants), "tld missing on some variants"
-          assert all(isinstance(v["registered"], bool) for v in variants), "registered must be bool"
-          assert all(isinstance(v["mx"], list) for v in variants), "mx must be a list"
+          assert all("registered" not in v for v in variants), "generation must not resolve registration"
+          assert all("mx" not in v for v in variants), "generation must not resolve MX"
 
           from app import _effective_tld, _resolve
 
@@ -68,15 +68,9 @@ jobs:
           a, mx_records, ns_records = _resolve("example.com")
           assert a, "example.com should resolve"
 
-          # /generate/stream must be NDJSON: one line per variant, then a
-          # single closing "done" line — and the two endpoints must agree on
-          # which variants they return.
-          r = c.post("/generate/stream", json={"domain": "example.com", "tlds": ["com"]})
-          assert r.status_code == 200, r.text
-          lines = [json.loads(line) for line in r.text.splitlines() if line]
-          assert lines[-1]["type"] == "done"
-          assert all(line["type"] == "variant" for line in lines[:-1])
-          assert lines[-1]["variant_count"] == len(lines) - 1 == len(variants)
+          # /generate/stream is gone with the resolution that made generation
+          # slow enough to need it.
+          assert c.post("/generate/stream", json={"domain": "example.com"}).status_code == 404
 
           # The input domain itself is not a lookalike.
           assert not any(v["algorithm"].startswith("*") for v in variants)
@@ -90,7 +84,7 @@ jobs:
   # merkleye/merkleye's deploy/docker-compose.yml, rather than trusting that
   # it merely parses.
   container-build:
-    name: Build merkleye-dnstwist
+    name: Build dnstwist
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -99,12 +93,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build merkleye-dnstwist
+      - name: Build dnstwist
         uses: docker/build-push-action@v7
         with:
           context: .
           file: Containerfile
           push: false
-          tags: merkleye-dnstwist:ci
-          cache-from: type=gha,scope=merkleye-dnstwist
-          cache-to: type=gha,mode=max,scope=merkleye-dnstwist
+          tags: dnstwist:ci
+          cache-from: type=gha,scope=dnstwist
+          cache-to: type=gha,mode=max,scope=dnstwist

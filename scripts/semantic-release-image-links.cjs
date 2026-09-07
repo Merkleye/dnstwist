@@ -16,7 +16,7 @@
 
 const REGISTRY = "ghcr.io/merkleye";
 const REPO = "merkleye/dnstwist";
-const IMAGE = "merkleye-dnstwist";
+const IMAGE = "dnstwist";
 
 module.exports = {
   generateNotes: async (_pluginConfig, context) => {
