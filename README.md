@@ -43,4 +43,4 @@ it without a separate GHCR access grant.
 
 ## License
 
-Apache-2.0, matching `merkleye/merkleye`.
+Apache-2.0
