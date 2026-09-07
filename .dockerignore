@@ -1,0 +1,26 @@
+# Keeps the build context small and the image reproducible from source: the
+# Containerfile only ever COPYs requirements.txt and app.py, so nothing else
+# here is needed inside the image.
+.git
+.github
+.gitignore
+.gitattributes
+*.md
+LICENSE
+tests
+requirements-dev.txt
+.coverage
+.pytest_cache
+__pycache__
+*.pyc
+coverage
+node_modules
+package.json
+package-lock.json
+.releaserc.json
+mise.toml
+scripts
+.containerignore
+.dockerignore
+Containerfile
+Dockerfile
