@@ -4,17 +4,22 @@ set -euo pipefail
 # Invoked by semantic-release's @semantic-release/exec prepareCmd as:
 #   scripts/release-image.sh ${nextRelease.version}
 #
-# Builds and pushes the merkleye-dnstwist image (multi-arch) tagged with the
+# Builds and pushes the dnstwist image (multi-arch) tagged with the
 # version semantic-release just computed, then generates one SPDX SBOM per
 # platform — a multi-arch manifest list has different packages per platform,
 # so the list digest itself isn't a meaningful SBOM scan target.
+#
+# Published as ghcr.io/merkleye/dnstwist — a package scoped to this repo, not
+# the ghcr.io/merkleye/merkleye-dnstwist package the old monorepo published
+# (and whose GHCR access list this repo's default token has no reason to be
+# on).
 #
 # Mirrors merkleye/merkleye's scripts/release-images.sh, narrowed to the one
 # image this repo owns.
 
 VERSION="${1:?usage: release-image.sh <version>}"
 REGISTRY="ghcr.io/merkleye"
-IMAGE="merkleye-dnstwist"
+IMAGE="dnstwist"
 PLATFORMS="linux/amd64,linux/arm64"
 
 OCI_REVISION="$(git rev-parse HEAD)"

@@ -10,6 +10,12 @@
 # docker builder, ghcr.io, and the pr- tag prefix -- so nothing is
 # overridden. What stays here is the one repo-specific fact: this tree ships
 # a single image, built from ./Containerfile.
+#
+# The package is `dnstwist`, scoped to this repo -- not the
+# `merkleye-dnstwist` package the old monorepo published, whose GHCR access
+# list this repo's default token has no reason to be on. Keep this in step
+# with scripts/release-image.sh's IMAGE and
+# scripts/semantic-release-image-links.cjs.
 name: PR preview image lifecycle
 
 on:
@@ -33,7 +39,7 @@ jobs:
       packages: write
     uses: Merkleye/github-templates/.github/workflows/ghcr-pr-preview-image.yml@main
     with:
-      images: '[{"image":"merkleye-dnstwist","context":".","file":"Containerfile"}]'
+      images: '[{"image":"dnstwist","context":".","file":"Containerfile"}]'
 
   cleanup-preview:
     if: github.event.action == 'closed'
@@ -41,4 +47,4 @@ jobs:
       packages: write
     uses: Merkleye/github-templates/.github/workflows/ghcr-pr-preview-cleanup.yml@main
     with:
-      packages: '["merkleye-dnstwist"]'
+      packages: '["dnstwist"]'
