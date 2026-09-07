@@ -27,12 +27,21 @@ it without a separate GHCR access grant.
 |---|---|
 | `app.py` | FastAPI service |
 | `requirements.txt` | Pinned dependencies, including `dnstwist[full]` |
+| `requirements-dev.txt` | Test-only dependencies (pytest, pytest-cov) |
+| `tests/` | pytest suite for `app.py`, run via `mise run test` |
 | `Containerfile` | Builds `ghcr.io/merkleye/dnstwist` |
+
+## Testing
+
+`mise run test` installs `requirements.txt` and `requirements-dev.txt`, then
+runs `tests/test_app.py` with `pytest-cov` and gates on a 100%
+statement-coverage floor (`--cov-fail-under=100`).
 
 ## CI/CD
 
-- `.github/workflows/ci.yml` — smoke-tests the generator against
-  `example.com` and builds the container image on every pull request.
+- `.github/workflows/ci.yml` — runs the pytest suite (100% statement-coverage
+  floor, `mise run test`) and builds the container image on every pull
+  request.
 - `.github/workflows/pr-preview-image.yml` — publishes a
   `ghcr.io/merkleye/dnstwist:pr-<number>` preview image per PR
   (non-fork only), cleaned up on close.
