@@ -9,5 +9,9 @@ description = "Install test dependencies and run the pytest suite with a 100% st
 run = """
 set -e
 pip install -q -r requirements.txt -r requirements-dev.txt
-pytest --cov=app --cov-report=term-missing --cov-fail-under=100
+# python -m pytest, not a bare `pytest`: tests/ has no __init__.py, so
+# pytest's own rootdir-insertion puts tests/ on sys.path, not the repo
+# root -- `import app` then fails. `python -m` adds the cwd (repo root)
+# to sys.path itself, which is what makes the import resolve.
+python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=100
 """
