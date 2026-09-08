@@ -6,7 +6,7 @@
 # Consumed by merkleye/merkleye's deploy/docker-compose.yml as
 # ghcr.io/merkleye/merkleye-dnstwist — this repo owns the source and CI/CD for
 # that image; merkleye/merkleye only references the published tag.
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ARG OCI_VERSION=0.0.0
 ARG OCI_REVISION=unknown
