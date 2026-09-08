@@ -3,15 +3,49 @@
 # independently of this; this is what CI and a local `mise run test` use.
 python = "3.12"
 node = "24" # .github/workflows/release.yml
+# Drives the live OpenAPI contract test (.github/workflows/ci.yml's
+# api-contract job, scripts/test-contract.sh) against api/openapi.yaml. v4
+# reads OpenAPI 3.1 natively — no --experimental flag — but its CLI, its
+# default check set and its data generation modes all move between minors, and
+# this pass is a gate rather than a smoke test: a version that quietly stops
+# running a check looks exactly like a passing build. Pinned so CI and a laptop
+# run the same checks. Kept in step with merkleye/merkleye's own pin, so a
+# contract failure means the same thing on both sides of the sidecar boundary.
+"pipx:schemathesis" = "4.25.2"
+
+[tasks.deps]
+description = "Install the runtime and test dependencies into the mise-managed python"
+run = "pip install -q -r requirements.txt -r requirements-dev.txt"
 
 [tasks.test]
-description = "Install test dependencies and run the pytest suite with a 100% statement-coverage floor"
+description = "Run the pytest suite with a 100% statement-coverage floor"
+depends = ["deps"]
 run = """
 set -e
-pip install -q -r requirements.txt -r requirements-dev.txt
 # python -m pytest, not a bare `pytest`: tests/ has no __init__.py, so
 # pytest's own rootdir-insertion puts tests/ on sys.path, not the repo
 # root -- `import app` then fails. `python -m` adds the cwd (repo root)
 # to sys.path itself, which is what makes the import resolve.
 python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=100
 """
+
+[tasks."spec:export"]
+description = "Regenerate api/openapi.yaml from app.py"
+depends = ["deps"]
+run = "python scripts/export-openapi.py"
+
+[tasks.spec]
+description = "Check api/openapi.yaml matches app.py, and validate the document"
+depends = ["deps"]
+run = """
+set -e
+# Drift first: validating a stale document tells you nothing about the code
+# that is actually shipping.
+python scripts/export-openapi.py --check
+python scripts/validate-spec.py
+"""
+
+[tasks.contract]
+description = "Replay api/openapi.yaml against a live server with Schemathesis"
+depends = ["deps"]
+run = "./scripts/test-contract.sh"

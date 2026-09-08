@@ -1,0 +1,50 @@
+# Schemathesis 4 configuration for the live OpenAPI contract test that
+# scripts/test-contract.sh and .github/workflows/ci.yml's api-contract job both
+# run. Discovered automatically: schemathesis walks up from the working
+# directory looking for this filename, so both callers pick it up by running
+# from the repo root and neither has to name it on the command line.
+#
+# This service has no authentication, so unlike merkleye/merkleye's copy there
+# are no [auth.openapi.*] sections here. What is left is the one thing the
+# document genuinely cannot express.
+#
+# --- The operation whose input the document cannot fully describe -----------
+#
+# POST /generate takes a domain. `domain` is declared as a bounded string,
+# which is as far as JSON Schema can usefully go: the real requirement is
+# "something IDNA can encode and dnstwist can split into a name and a TLD", and
+# writing that as a regex would either reject names that work (every IDN, every
+# multi-label suffix) or accept ones that don't. So the handler validates it and
+# answers 400, which is exactly what the schemathesis-generated strings get,
+# and positive_data_acceptance reads that as the API rejecting schema-compliant
+# input.
+#
+# The check stays ON, for this operation and for every other status it can
+# report — only 400 joins the accepted list, and only here. The alternatives
+# were to disable a check (hiding every other way this route could break), to
+# invent a domain regex for the fuzzer's benefit (a real contract change made
+# to suit a test), or to have the handler answer 422 for an unparseable domain
+# (same, and it would move a status code merkleye/merkleye's client already
+# handles). Saying plainly that this rule lives in the handler because it
+# cannot live in the schema is the smaller cost.
+#
+# The successful path is not left untested by this: GenerateRequest carries an
+# `examples` entry with a real domain, which the examples phase replays and
+# every check runs against.
+[[operations]]
+include-name = "POST /generate"
+
+[operations.checks.positive_data_acceptance]
+expected-statuses = ["2xx", "400", "422"]
+
+# The same cause produces a warning at the end of every run:
+#
+#   Schema validation mismatch: 1 operation mostly rejected generated data
+#     - POST /generate
+#
+# It is expected and it does not fail the run. Schemathesis is reporting that
+# the strings it invents for `domain` are almost never domains, which is the
+# observation above stated from the other side. It is deliberately not silenced
+# in [warnings]: the same warning on a route that has no reason to reject its
+# own documented input would be worth reading, and a config that hides the
+# class hides that too.
