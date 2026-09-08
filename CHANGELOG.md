@@ -1,3 +1,19 @@
+## [1.1.1](https://github.com/Merkleye/dnstwist/compare/v1.1.0...v1.1.1) (2026-09-08)
+
+### Bug Fixes
+
+* **release:** replace the deprecated semantic-release comment options ([#24](https://github.com/Merkleye/dnstwist/issues/24)) ([bdbf9f1](https://github.com/Merkleye/dnstwist/commit/bdbf9f1e8ce56d9651f8f6b33d5c11544bf64334))
+
+
+
+## Container Image
+
+- `docker pull ghcr.io/merkleye/dnstwist:v1.1.1` — this exact release
+- `docker pull ghcr.io/merkleye/dnstwist:v1` — newest 1.x
+- `docker pull ghcr.io/merkleye/dnstwist:latest` — newest release
+
+[Package page](https://github.com/merkleye/dnstwist/pkgs/container/dnstwist)
+
 ## [1.1.0](https://github.com/Merkleye/dnstwist/compare/v1.0.0...v1.1.0) (2026-09-08)
 
 ### Features
