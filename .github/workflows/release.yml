@@ -28,11 +28,6 @@ jobs:
       # what a release builds. The template pushes v<version>, v<major> and
       # latest.
       images: '[{"image":"dnstwist","context":".","file":"Containerfile"}]'
-      sbom: true
-      # The pushed image, not dir:. — the SBOM should describe the layers a
-      # user pulls, base image included. `images` names them from the input
-      # above, so the registry is not spelled out here a second time.
-      sbom-target: images
     secrets:
       CLIENT_ID: ${{ secrets.CLIENT_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
