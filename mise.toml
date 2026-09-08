@@ -1,7 +1,7 @@
 [tools]
 # The published image pins its own python:3.12-slim base in the Containerfile
 # independently of this; this is what CI and a local `mise run test` use.
-python = "3.12"
+python = "3.14.7"
 node = "24" # .github/workflows/release.yml
 # Drives the live OpenAPI contract test (.github/workflows/ci.yml's
 # api-contract job, scripts/test-contract.sh) against api/openapi.yaml. v4

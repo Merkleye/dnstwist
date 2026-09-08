@@ -24,6 +24,10 @@ jobs:
       # the default GITHUB_TOKEN cannot do.
       app-token: true
       containers: true
+      # The same JSON pr-preview-image.yml passes, so a preview builds exactly
+      # what a release builds. The template pushes v<version>, v<major> and
+      # latest.
+      images: '[{"image":"dnstwist","context":".","file":"Containerfile"}]'
     secrets:
       CLIENT_ID: ${{ secrets.CLIENT_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}

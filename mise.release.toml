@@ -1,5 +1,0 @@
-# Loaded on top of mise.toml when MISE_ENV=release, which the release
-# workflow sets. scripts/release-image.sh shells out to syft once the image
-# is pushed; nothing else in this repo does, so a PR run never installs it.
-[tools]
-syft = "1"

@@ -5,7 +5,7 @@
     ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
     ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
     "./scripts/semantic-release-image-links.cjs",
-    ["@semantic-release/exec", { "prepareCmd": "scripts/release-image.sh ${nextRelease.version}" }],
+    ["@semantic-release/exec", { "prepareCmd": "python3 \"$MERKLEYE_RELEASE_IMAGES\" ${nextRelease.version}" }],
     "@semantic-release/changelog",
     [
       "@semantic-release/git",
@@ -17,10 +17,9 @@
     [
       "@semantic-release/github",
       {
-        "assets": [{ "path": "sbom/*.spdx.json", "label": "SBOM: ${basename}" }],
-        "successComment": false,
-        "failComment": false,
-        "failTitle": false,
+        "assets": [{ "path": "sbom/*.spdx.json" }],
+        "successCommentCondition": false,
+        "failCommentCondition": false,
         "labels": false
       }
     ]
