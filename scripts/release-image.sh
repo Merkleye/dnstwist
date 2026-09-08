@@ -24,6 +24,10 @@ IMAGE="dnstwist"
 # template, so the workflow and this script cannot name different
 # architectures. The fallback is for running this by hand.
 PLATFORMS="${CONTAINER_PLATFORMS:-linux/amd64,linux/arm64}"
+# Moving major tag alongside the exact version: v1.2.3 pins, v1 tracks the
+# newest 1.x, latest tracks the newest release. semantic-release only ever
+# moves forward on this branch, so both moving tags are safe to overwrite.
+MAJOR="${VERSION%%.*}"
 
 OCI_REVISION="$(git rev-parse HEAD)"
 OCI_CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -39,6 +43,7 @@ docker buildx build \
   --push \
   --platform "${PLATFORMS}" \
   --tag "${ref}:v${VERSION}" \
+  --tag "${ref}:v${MAJOR}" \
   --tag "${ref}:latest" \
   --build-arg OCI_VERSION="${VERSION}" \
   --build-arg OCI_REVISION="${OCI_REVISION}" \
