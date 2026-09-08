@@ -1,0 +1,59 @@
+# The OpenAPI half of the PR gate.
+#
+# The pytest suite is not here: it lives in pr-preview-image.yml, because it
+# has to gate the image publish and `needs:` does not reach across workflows
+# (see that file, and github-templates' ghcr-pr-preview-image.yml). These two
+# jobs gate nothing but themselves, so they belong in their own workflow where
+# a failure reads as "the contract regressed" rather than folding into an
+# unrelated build.
+#
+# Both jobs follow the org's mise convention: check out, install the toolchain
+# pinned in mise.toml through the shared setup-mise action, then run the repo's
+# own task by name — so `mise run spec` and `mise run contract` mean the same
+# thing on a laptop as they do here.
+name: CI
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spec:
+    name: OpenAPI spec
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Merkleye/github-templates/.github/actions/setup-mise@main
+
+      # api/openapi.yaml is generated from app.py, so this fails on two
+      # things: a route or model changed without the document being
+      # regenerated, and a document that is regenerated but no longer says
+      # what a published contract has to say (an operationId collision, an
+      # undescribed response). Both are cheap to check and expensive to find
+      # in a consumer.
+      - run: mise run spec
+
+  api-contract:
+    name: OpenAPI contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Merkleye/github-templates/.github/actions/setup-mise@main
+
+      # Its own job rather than a step in `spec`: this one boots a real
+      # uvicorn and replays every declared operation against it, so it is both
+      # slower and failing for a different reason — the document and the
+      # server disagreeing, rather than the document and the source. See
+      # scripts/test-contract.sh for the flags and the one excluded operation.
+      - run: mise run contract

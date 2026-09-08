@@ -3,6 +3,11 @@ __pycache__/
 .coverage
 .pytest_cache/
 
+# Left behind by `mise run contract` (scripts/test-contract.sh): the uvicorn it
+# boots, and schemathesis' own example database.
+uvicorn.contract.log
+uvicorn.contract.pid
+.schemathesis/
 # semantic-release's tooling; package.json/package-lock.json are the record.
 node_modules/
 
