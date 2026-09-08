@@ -24,6 +24,15 @@ jobs:
       # the default GITHUB_TOKEN cannot do.
       app-token: true
       containers: true
+      # The same JSON pr-preview-image.yml passes, so a preview builds exactly
+      # what a release builds. The template pushes v<version>, v<major> and
+      # latest.
+      images: '[{"image":"dnstwist","context":".","file":"Containerfile"}]'
+      sbom: true
+      # The pushed image, not dir:. — the SBOM should describe the layers a
+      # user pulls, base image included. Spelled out rather than interpolated
+      # from github.repository, which capitalises the org.
+      sbom-target: ghcr.io/merkleye/dnstwist:$RELEASE_TAG
     secrets:
       CLIENT_ID: ${{ secrets.CLIENT_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
