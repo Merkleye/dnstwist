@@ -1,6 +1,11 @@
-# Publishes a throwaway container image per pull request so a reviewer can
-# run the change instead of reading a Containerfile diff, and deletes it
+# The PR gate. The template runs `mise run test` first and builds nothing
+# until it passes, then publishes a throwaway container image so a reviewer
+# can run the change instead of reading a Containerfile diff, and deletes it
 # again when the PR closes.
+#
+# There is no separate ci.yml: the test job has to live in the same workflow
+# as the publish to gate it, because `needs:` does not reach across
+# workflows.
 name: PR preview image lifecycle
 
 on:
@@ -23,6 +28,7 @@ jobs:
     uses: Merkleye/github-templates/.github/workflows/ghcr-pr-preview-image.yml@main
     with:
       images: '[{"image":"dnstwist","context":".","file":"Containerfile"}]'
+      # test-task defaults to `test`, which is what mise.toml calls it.
 
   cleanup-preview:
     if: github.event.action == 'closed'
