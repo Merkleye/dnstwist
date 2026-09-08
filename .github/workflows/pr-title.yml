@@ -1,0 +1,20 @@
+# Validates that pull request titles follow the Conventional Commits spec
+# (https://www.conventionalcommits.org)
+name: PR Title
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  pull-requests: read
+
+jobs:
+  conventional-title:
+    permissions:
+      pull-requests: read
+    uses: Merkleye/github-templates/.github/workflows/pr-title.yml@main

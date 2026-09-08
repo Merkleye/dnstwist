@@ -39,12 +39,11 @@ statement-coverage floor (`--cov-fail-under=100`).
 
 ## CI/CD
 
-- `.github/workflows/ci.yml` — runs the pytest suite (100% statement-coverage
-  floor, `mise run test`) and builds the container image on every pull
-  request.
-- `.github/workflows/pr-preview-image.yml` — publishes a
-  `ghcr.io/merkleye/dnstwist:pr-<number>` preview image per PR
-  (non-fork only), cleaned up on close.
+- `.github/workflows/pr-preview-image.yml` — the whole PR gate. Runs the
+  pytest suite (100% statement-coverage floor, `mise run test`), then builds
+  the container image and publishes it as
+  `ghcr.io/merkleye/dnstwist:pr-<number>`, cleaned up on close. A fork PR
+  gets the tests and the build, but no published image.
 - `.github/workflows/release.yml` — manual `workflow_dispatch` on `main`;
   runs `semantic-release` (conventional commits) to version, build, and push
   a multi-arch (`linux/amd64`, `linux/arm64`) image plus SPDX SBOMs, then
