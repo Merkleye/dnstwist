@@ -1,3 +1,19 @@
+## [1.1.0](https://github.com/Merkleye/dnstwist/compare/v1.0.0...v1.1.0) (2026-09-08)
+
+### Features
+
+* **release:** attach the SBOM to the release as a downloadable asset ([#23](https://github.com/Merkleye/dnstwist/issues/23)) ([dd5d9bd](https://github.com/Merkleye/dnstwist/commit/dd5d9bd61122f5dbf361af120aa4cc11b4b5f0a2))
+
+
+
+## Container Image
+
+- `docker pull ghcr.io/merkleye/dnstwist:v1.1.0` — this exact release
+- `docker pull ghcr.io/merkleye/dnstwist:v1` — newest 1.x
+- `docker pull ghcr.io/merkleye/dnstwist:latest` — newest release
+
+[Package page](https://github.com/merkleye/dnstwist/pkgs/container/dnstwist)
+
 ## 1.0.0 (2026-09-08)
 
 ### Features
