@@ -11,10 +11,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Stays here: mise.toml's `test` task installs both requirement files and
-  # runs pytest with a 100% statement-coverage floor. Only the installer is
-  # shared -- a template that forwarded task names would add a hop without
-  # removing a copy.
   test:
     name: Test (100% coverage floor)
     runs-on: ubuntu-latest
@@ -23,9 +19,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Merkleye/github-templates/.github/actions/setup-mise@main
       - run: mise run test
-
-  # Same image list pr-preview-image.yml and scripts/release-image.sh use --
-  # keep all three in step.
   container-build:
     permissions:
       contents: read

@@ -15,7 +15,6 @@ permissions: {}
 jobs:
   release:
     if: github.ref == 'refs/heads/main'
-    # A caller must grant at least what the called job asks for.
     permissions:
       contents: write # tag, CHANGELOG commit, GitHub Release
       packages: write # image push

@@ -1,21 +1,6 @@
 # Publishes a throwaway container image per pull request so a reviewer can
 # run the change instead of reading a Containerfile diff, and deletes it
 # again when the PR closes.
-#
-# Both halves come from Merkleye/github-templates. This file was a third
-# copy of the same 194-line workflow that merkleye/merkleye and certspotter
-# each carried, differing only in the image name.
-#
-# The template's defaults already match this repo -- ubuntu-latest, the
-# docker builder, ghcr.io, and the pr- tag prefix -- so nothing is
-# overridden. What stays here is the one repo-specific fact: this tree ships
-# a single image, built from ./Containerfile.
-#
-# The package is `dnstwist`, scoped to this repo -- not the
-# `merkleye-dnstwist` package the old monorepo published, whose GHCR access
-# list this repo's default token has no reason to be on. Keep this in step
-# with scripts/release-image.sh's IMAGE and
-# scripts/semantic-release-image-links.cjs.
 name: PR preview image lifecycle
 
 on:
@@ -32,8 +17,6 @@ permissions: {}
 jobs:
   publish-preview:
     if: github.event.action != 'closed'
-    # Matches the permissions the called job requests. A called workflow can
-    # narrow the token but never widen it, so these have to be granted here.
     permissions:
       contents: read
       packages: write
