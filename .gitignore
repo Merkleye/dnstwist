@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .coverage
 .pytest_cache/
+
+# semantic-release's tooling; package.json/package-lock.json are the record.
+node_modules/
