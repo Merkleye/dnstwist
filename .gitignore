@@ -5,3 +5,8 @@ __pycache__/
 
 # semantic-release's tooling; package.json/package-lock.json are the record.
 node_modules/
+
+# Release build artifact: release-images.py writes one SPDX file per platform
+# here, read back off the pushed image, and @semantic-release/github uploads
+# them to the Release.
+sbom/

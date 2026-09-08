@@ -17,6 +17,7 @@
     [
       "@semantic-release/github",
       {
+        "assets": [{ "path": "sbom/*.spdx.json" }],
         "successComment": false,
         "failComment": false,
         "failTitle": false,
