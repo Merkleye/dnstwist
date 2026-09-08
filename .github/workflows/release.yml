@@ -1,26 +1,12 @@
-# Cuts a release: semantic-release computes the version from the commits
-# since the last tag, builds and pushes the image with its SBOM (via
-# @semantic-release/exec -> scripts/release-image.sh), updates CHANGELOG.md,
-# and creates the GitHub Release with the SBOM files attached.
-#
-# All of that is decided by .releaserc.json and that script, which are this
-# repo's own. What comes from Merkleye/github-templates is only the
-# environment they need: a full-history checkout, the release-bot App token
-# and its git identity, the mise toolchain, a container builder, a GHCR login
-# and the syft CLI. That environment was a copy — certspotter and merkleye
-# each carry the same one, and certspotter's had already drifted a
-# jdx/mise-action version away from this file for no reason anyone chose.
 name: Release
 
-# Manual only — a release is a deliberate act, not a side effect of every
-# merge to main. The job-level `if` below guards against a dispatch fired
-# against the wrong ref.
+# Manual: a release is a deliberate act, not a side effect of every merge.
 on:
   workflow_dispatch:
 
 concurrency:
-  # Unlike ci.yml's PR concurrency group, an in-flight release must never be
-  # cancelled mid-push — later triggers queue behind it instead of racing it.
+  # An in-flight release must never be cancelled mid-push; later triggers
+  # queue behind it instead of racing it.
   group: release-main
   cancel-in-progress: false
 
@@ -29,33 +15,16 @@ permissions: {}
 jobs:
   release:
     if: github.ref == 'refs/heads/main'
-    # Mirrors the permissions the called job requests. A called workflow can
-    # narrow the token but never widen it, so these have to be granted here:
-    # contents for the tag, the CHANGELOG commit and the Release; packages
-    # for the image push.
+    # A caller must grant at least what the called job asks for.
     permissions:
-      contents: write
-      packages: write
+      contents: write # tag, CHANGELOG commit, GitHub Release
+      packages: write # image push
     uses: Merkleye/github-templates/.github/workflows/semantic-release.yml@main
     with:
-      # The release-bot App (org-level APP_ID/APP_PRIVATE_KEY) so
-      # @semantic-release/git can push CHANGELOG.md to main even with branch
-      # protection enabled — the default GITHUB_TOKEN cannot bypass that.
-      # The template scopes that token to this repository alone, which the
-      # inline version this replaces did not do.
+      # @semantic-release/git pushes CHANGELOG.md to a protected main, which
+      # the default GITHUB_TOKEN cannot do.
       app-token: true
       containers: true
-      # QEMU for arm64 only; the runner provides amd64 natively. What gets
-      # built for which platform is still scripts/release-image.sh's call.
-      container-platforms: arm64
-      # The binary only. SBOM generation happens from inside
-      # scripts/release-image.sh, per platform, once the image is actually
-      # built and pushed.
-      install-syft: true
     secrets:
       APP_ID: ${{ secrets.APP_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-
-# Everything else is the template's default and matches what this file did
-# inline: ubuntu-latest, a 30-minute timeout, ghcr.io, `npm ci`, and
-# `container-builder: auto`, which resolves to Buildx on that runner label.

@@ -20,7 +20,10 @@ set -euo pipefail
 VERSION="${1:?usage: release-image.sh <version>}"
 REGISTRY="ghcr.io/merkleye"
 IMAGE="dnstwist"
-PLATFORMS="linux/amd64,linux/arm64"
+# Set by .github/workflows/release.yml through the semantic-release
+# template, so the workflow and this script cannot name different
+# architectures. The fallback is for running this by hand.
+PLATFORMS="${CONTAINER_PLATFORMS:-linux/amd64,linux/arm64}"
 
 OCI_REVISION="$(git rev-parse HEAD)"
 OCI_CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

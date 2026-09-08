@@ -11,14 +11,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Repo-specific and staying here: mise.toml's `test` task installs
-  # requirements.txt + requirements-dev.txt and runs pytest with a 100%
-  # statement-coverage floor (--cov-fail-under=100) — see tests/test_app.py.
-  # Every network call is mocked, so this never depends on real DNS.
-  #
-  # Only the installer is shared. A template that forwarded a list of task
-  # names would add a hop without removing a copy — see github-templates'
-  # README, "The mise convention".
+  # Stays here: mise.toml's `test` task installs both requirement files and
+  # runs pytest with a 100% statement-coverage floor. Only the installer is
+  # shared -- a template that forwarded task names would add a hop without
+  # removing a copy.
   test:
     name: Test (100% coverage floor)
     runs-on: ubuntu-latest
@@ -26,17 +22,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Merkleye/github-templates/.github/actions/setup-mise@main
+      - run: mise run test
 
-      - name: Run tests
-        run: mise run test
-
-  # The container-integrity gate, from the template. Same build this repo ran
-  # inline, and the same {image, context, file} list pr-preview-image.yml and
-  # scripts/release-image.sh use — keep all three in step.
-  #
-  # Defaults cover everything else: ubuntu-latest, `builder: auto` (which
-  # resolves to Buildx on that label), the per-image GitHub Actions layer
-  # cache this job already used, and a 15-minute timeout.
+  # Same image list pr-preview-image.yml and scripts/release-image.sh use --
+  # keep all three in step.
   container-build:
     permissions:
       contents: read
