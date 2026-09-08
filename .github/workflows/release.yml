@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: write # tag, CHANGELOG commit, GitHub Release
       packages: write # image push
-    uses: Merkleye/github-templates/.github/workflows/semantic-release.yml@main
+    uses: Merkleye/github-templates/.github/workflows/semantic-release.yml@2df9abc1c2797c87571b993498850eced6fdf21b # main
     with:
       # @semantic-release/git pushes CHANGELOG.md to a protected main, which
       # the default GITHUB_TOKEN cannot do.

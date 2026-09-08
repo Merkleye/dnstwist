@@ -25,7 +25,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: Merkleye/github-templates/.github/workflows/ghcr-pr-preview-image.yml@main
+    uses: Merkleye/github-templates/.github/workflows/ghcr-pr-preview-image.yml@2df9abc1c2797c87571b993498850eced6fdf21b # main
     with:
       images: '[{"image":"dnstwist","context":".","file":"Containerfile"}]'
       # test-task defaults to `test`, which is what mise.toml calls it.
@@ -34,6 +34,6 @@ jobs:
     if: github.event.action == 'closed'
     permissions:
       packages: write
-    uses: Merkleye/github-templates/.github/workflows/ghcr-pr-preview-cleanup.yml@main
+    uses: Merkleye/github-templates/.github/workflows/ghcr-pr-preview-cleanup.yml@2df9abc1c2797c87571b993498850eced6fdf21b # main
     with:
       packages: '["dnstwist"]'

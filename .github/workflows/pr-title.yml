@@ -17,4 +17,4 @@ jobs:
   conventional-title:
     permissions:
       pull-requests: read
-    uses: Merkleye/github-templates/.github/workflows/pr-title.yml@main
+    uses: Merkleye/github-templates/.github/workflows/pr-title.yml@2df9abc1c2797c87571b993498850eced6fdf21b # main
