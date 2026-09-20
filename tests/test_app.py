@@ -12,10 +12,13 @@ _resolve) rather than to assert interesting behavior.
 from __future__ import annotations
 
 import logging
+import pathlib
 import socket
 import sys
+from datetime import datetime
 
 import pytest
+import yaml
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from opentelemetry import trace
@@ -235,9 +238,28 @@ def test_run_fuzzer_rejects_empty_domain() -> None:
 
 
 def test_run_fuzzer_rejects_non_positive_max_variants() -> None:
+    # Assigned after construction rather than passed in: `max_variants` is
+    # declared `gt=0`, so pydantic rejects a zero before the model exists.
+    # The handler check this covers is what still stands between a direct
+    # caller (this test, a future in-process one) and the same mistake.
+    req = GenerateRequest(domain="example.com")
+    req.max_variants = 0
     with pytest.raises(HTTPException) as exc_info:
-        _run_fuzzer(GenerateRequest(domain="example.com", max_variants=0))
+        _run_fuzzer(req)
     assert exc_info.value.status_code == 400
+
+
+def test_run_fuzzer_rejects_overlong_domain() -> None:
+    # Same shape as above: the schema's maxLength answers this with a 422
+    # over HTTP, and this is the handler-side guard behind it. It exists
+    # because the cost is real — permutation is quadratic in the length of
+    # the name, and a long enough one exhausts the container's memory.
+    req = GenerateRequest(domain="example.com")
+    req.domain = "a" * (app_module.MAX_DOMAIN_LENGTH + 1) + ".com"
+    with pytest.raises(HTTPException) as exc_info:
+        _run_fuzzer(req)
+    assert exc_info.value.status_code == 400
+    assert "at most" in exc_info.value.detail
 
 
 def test_run_fuzzer_wraps_dnstwist_exceptions() -> None:
@@ -406,7 +428,68 @@ def test_health_endpoint(client: TestClient) -> None:
     body = r.json()
     assert body["status"] == "ok"
     assert body["generator"] == "dnstwist"
-    assert "checked_at" in body
+    # Not just "present": merkleye's perf suite and the Containerfile's
+    # HEALTHCHECK both read this response, and the document now declares
+    # checked_at as a date-time.
+    assert datetime.fromisoformat(body["checked_at"]).tzinfo is not None
+
+
+# --- the published OpenAPI document ----------------------------------------
+
+
+def test_openapi_json_is_served(client: TestClient) -> None:
+    r = client.get("/openapi.json")
+    assert r.status_code == 200
+    assert r.json()["info"]["version"] == app_module.SERVICE_VERSION
+
+
+def test_openapi_yaml_endpoint_serves_a_parseable_document(client: TestClient) -> None:
+    r = client.get("/openapi.yaml")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/yaml")
+    document = yaml.safe_load(r.text)
+    assert document["openapi"].startswith("3.1")
+    assert set(document["paths"]) == {"/generate", "/enrich", "/health", "/openapi.yaml"}
+
+
+def test_openapi_yaml_matches_the_committed_spec(client: TestClient) -> None:
+    """The drift check, as a unit test.
+
+    `mise run spec` runs the same comparison in CI via
+    scripts/export-openapi.py --check; having it here too means a route or
+    model change that forgets to regenerate api/openapi.yaml fails in the
+    suite a contributor already runs, rather than one job later.
+    """
+    committed = pathlib.Path(__file__).resolve().parent.parent / "api" / "openapi.yaml"
+    assert client.get("/openapi.yaml").text == committed.read_text(), (
+        "api/openapi.yaml is stale — run `mise run spec:export` and commit the result"
+    )
+
+
+def test_openapi_document_declares_operation_ids() -> None:
+    """Every operation is named explicitly.
+
+    FastAPI's fallback operationId is derived from the function name and the
+    path (`generate_variants_generate_post`), so it changes when either is
+    renamed — and it is what a client generator turns into a method name.
+    scripts/validate-spec.py enforces this over the committed document; this
+    is the same rule at the source.
+    """
+    operations = [
+        operation
+        for item in app.openapi()["paths"].values()
+        for operation in item.values()
+    ]
+    ids = [operation["operationId"] for operation in operations]
+    assert ids == sorted(set(ids), key=ids.index), "duplicate operationId"
+    assert all(not op_id.endswith("_post") and not op_id.endswith("_get") for op_id in ids)
+
+
+def test_openapi_yaml_document_renders_descriptions_as_literal_blocks() -> None:
+    # The dumper's whole purpose: a docstring must not come back as a quoted
+    # scalar with a blank line per newline, which is what pyyaml does by
+    # default and what makes the committed document unreadable in review.
+    assert "description: |-" in app_module.openapi_yaml_document()
 
 
 # --- Variant model -----------------------------------------------------

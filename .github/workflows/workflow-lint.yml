@@ -1,0 +1,19 @@
+# The org's `uses:` conventions, checked on every PR that touches CI: actionlint
+# over the workflows, every third-party action pinned to a commit SHA, and
+# jdx/mise-action reachable only through github-templates' setup-mise.
+name: Workflow lint
+
+on:
+  pull_request:
+    # The rules are about YAML, and a PR that touches no YAML cannot break
+    # them.
+    paths:
+      - .github/**
+
+permissions: {}
+
+jobs:
+  lint:
+    permissions:
+      contents: read
+    uses: Merkleye/github-templates/.github/workflows/workflow-lint.yml@main
