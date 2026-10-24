@@ -11,6 +11,9 @@ tests
 requirements-dev.txt
 .coverage
 .pytest_cache
+.schemathesis
+uvicorn.contract.log
+uvicorn.contract.pid
 __pycache__
 *.pyc
 coverage
@@ -20,6 +23,8 @@ package-lock.json
 .releaserc.json
 mise.toml
 scripts
+api
+schemathesis.toml
 .containerignore
 .dockerignore
 Containerfile

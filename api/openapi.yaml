@@ -1,0 +1,378 @@
+openapi: 3.1.0
+info:
+  title: Merkleye dnstwist sidecar
+  description: |-
+    Lookalike domain generation and hit-time enrichment.
+
+    Stateless by design: it takes a domain and returns strings, touching no database. Consumed by [merkleye/merkleye](https://github.com/merkleye/merkleye)'s `internal/variants` client.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+  version: 0.1.0
+paths:
+  /generate:
+    post:
+      tags:
+      - generation
+      summary: Generate lookalike permutations of one domain
+      description: |-
+        Batch: run when a domain is added or a set is regenerated.
+
+        Produces permutation *names* and nothing else — no A lookups, no MX
+        lookups, no registration check. That state belongs to merkleye's
+        `internal/variantscan`, which refreshes it on a schedule against the
+        active set, because the answer moving is the signal and a value frozen at
+        generation time is wrong within weeks of being written.
+      operationId: generateVariants
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateResponse'
+        '400':
+          description: The domain is empty, or dnstwist cannot parse it as a name (no TLD, an unencodable
+            label). Permutation math has one input and this is what an unusable one produces.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /enrich:
+    post:
+      tags:
+      - enrichment
+      summary: Resolve one lookalike at hit time
+      description: |-
+        Resolve one lookalike, called only after a certificate for it has
+        actually appeared in CT.
+
+        NOTE: this is outbound traffic aimed at attacker-controlled infrastructure
+        and signals that you are watching. Some SOCs want it proxied or disabled —
+        the backend gates it behind config. See DESIGN §18, open decision 4.
+
+        That is also why this operation is excluded from the live Schemathesis run
+        (see schemathesis.toml): replaying it would point CI's resolver at whatever
+        names a fuzzer invents, at DNS latency per example. tests/test_app.py
+        covers its response contract with resolution mocked.
+      operationId: enrichDomain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrichRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrichResponse'
+        '400':
+          description: The domain is empty.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /health:
+    get:
+      tags:
+      - meta
+      summary: Liveness probe
+      description: |-
+        What the Containerfile's HEALTHCHECK polls, and what merkleye's perf
+        suite reads the sidecar's dnstwist version from.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /openapi.yaml:
+    get:
+      tags:
+      - meta
+      summary: This service's OpenAPI document, as YAML
+      operationId: getOpenAPIDocumentYAML
+      responses:
+        '200':
+          description: The same document FastAPI serves at /openapi.json, YAML-encoded. Byte-identical
+            to the committed api/openapi.yaml for the image's own revision — CI fails when they differ.
+          content:
+            application/yaml:
+              schema:
+                type: object
+                required:
+                - openapi
+                - info
+                - paths
+components:
+  schemas:
+    EnrichRequest:
+      properties:
+        domain:
+          type: string
+          maxLength: 253
+          title: Domain
+          description: The single lookalike to resolve. Empty input is answered with 400.
+      type: object
+      required:
+      - domain
+      title: EnrichRequest
+      examples:
+      - domain: example.com
+    EnrichResponse:
+      properties:
+        resolves:
+          type: boolean
+          title: Resolves
+          description: Whether the name has at least one A record.
+        a:
+          items:
+            type: string
+          type: array
+          title: A
+        mx:
+          items:
+            type: string
+          type: array
+          title: Mx
+          description: 'MX presence is the signal that matters most: it means the lookalike can receive
+            mail, i.e. it is capable of credential harvesting or BEC.'
+        ns:
+          items:
+            type: string
+          type: array
+          title: Ns
+        registered_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Registered At
+          description: Always null for now — see the operation's phase-3 note.
+        geo:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Geo
+      type: object
+      required:
+      - resolves
+      title: EnrichResponse
+    ErrorResponse:
+      properties:
+        detail:
+          type: string
+          title: Detail
+      type: object
+      required:
+      - detail
+      title: ErrorResponse
+      description: |-
+        FastAPI's own HTTPException body, declared so the 400s below are part
+        of the published contract rather than an undocumented shape a caller
+        discovers in production.
+    GenerateRequest:
+      properties:
+        domain:
+          type: string
+          maxLength: 64
+          title: Domain
+          description: The registrable domain (eTLD+1) to permute, e.g. `example.com`. Empty or unparseable
+            input is answered with 400; the length cap is what keeps permutation cost bounded — see the
+            field's maximum.
+        algorithms:
+          items:
+            type: string
+          type: array
+          maxItems: 64
+          title: Algorithms
+          description: dnstwist fuzzers to keep in the output. Names outside the generated set are ignored
+            rather than rejected, so a caller can pass a superset.
+        tlds:
+          items:
+            type: string
+          type: array
+          maxItems: 256
+          title: Tlds
+          description: TLDs the `tld-swap` fuzzer may swap in.
+        dictionary:
+          items:
+            type: string
+          type: array
+          maxItems: 1024
+          title: Dictionary
+          description: Extra words for the `dictionary` fuzzer.
+        max_variants:
+          type: integer
+          maximum: 1000000.0
+          exclusiveMinimum: 0.0
+          title: Max Variants
+          description: Cap on returned variants. Generation itself is not bounded by this — it is a cap
+            on the response, and `truncated` says whether it was reached.
+          default: 25000
+      type: object
+      required:
+      - domain
+      title: GenerateRequest
+      examples:
+      - algorithms:
+        - homoglyph
+        - omission
+        - tld-swap
+        dictionary: []
+        domain: example.com
+        max_variants: 25000
+        tlds:
+        - com
+        - net
+        - xyz
+    GenerateResponse:
+      properties:
+        generator:
+          type: string
+          title: Generator
+          default: dnstwist
+        generator_version:
+          type: string
+          title: Generator Version
+          description: Version of the dnstwist package that produced the set.
+        config_hash:
+          type: string
+          title: Config Hash
+          description: '`sha256:<hex>` over the generation inputs and the generator version. Two runs
+            with the same hash produce the same set, which is what lets a caller skip a pointless regeneration
+            and lets an analyst confirm months later that a stored set matches the config that claims
+            to have produced it (DESIGN G-10).'
+        truncated:
+          type: boolean
+          title: Truncated
+          description: True when `max_variants` cut the set short.
+        variants:
+          items:
+            $ref: '#/components/schemas/Variant'
+          type: array
+          title: Variants
+      type: object
+      required:
+      - generator_version
+      - config_hash
+      - truncated
+      - variants
+      title: GenerateResponse
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: '"ok" while the service can answer.'
+        generator:
+          type: string
+          title: Generator
+        generator_version:
+          type: string
+          title: Generator Version
+        checked_at:
+          type: string
+          format: date-time
+          title: Checked At
+      type: object
+      required:
+      - status
+      - generator
+      - generator_version
+      - checked_at
+      title: HealthResponse
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    Variant:
+      properties:
+        fqdn:
+          type: string
+          title: Fqdn
+          description: A-label form, always. Certificate SANs carry IDNs punycode-encoded on the wire,
+            so this is the match key (DESIGN G-08).
+        algorithm:
+          type: string
+          title: Algorithm
+          description: The dnstwist fuzzer that produced it.
+        unicode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Unicode
+          description: 'U-label form, present only when `fqdn` is an IDN. For display: `xn--80ajb1au1a38g.com`
+            conveys nothing, `ехамрӏе.com` shows the attack at a glance.'
+        tld:
+          type: string
+          title: Tld
+          description: Effective TLD of `fqdn`.
+          default: ''
+      type: object
+      required:
+      - fqdn
+      - algorithm
+      title: Variant
+tags:
+- name: generation
+  description: 'Permutation math: a domain in, lookalike names out. No DNS.'
+- name: enrichment
+  description: Hit-time resolution of a single lookalike. Outbound traffic aimed at attacker-controlled
+    infrastructure — see the operation's own description before enabling it in a hardened deployment.
+- name: meta
+  description: Liveness and contract discovery.
